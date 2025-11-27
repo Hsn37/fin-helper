@@ -1,0 +1,21 @@
+first api call request:
+{
+    logs: "string",
+}
+
+first api call response:
+{
+    itemized_csv: "csv string",
+    category_totals_csv: "csv string",
+    notes: ["list of strings"],
+}
+
+second api call request:
+{
+    totals: {
+        category_name: integer,
+        category_name: integer,
+        ...
+    },
+    notes: ["list of strings"],
+}
