@@ -16,7 +16,6 @@
         // ========== CONFIGURATION ==========
         // Edit these URLs to point to your n8n workflows
         const PROCESS_WORKFLOW_URL = 'https://axonbuild.app.n8n.cloud/webhook/process-logs';
-        const SAVE_WORKFLOW_URL = 'https://your-n8n-instance.com/webhook/save';
         // ===================================
 
         const { useState, useEffect } = React;
@@ -36,7 +35,6 @@
             const [categoryTotals, setCategoryTotals] = useState({});
             const [notes, setNotes] = useState([]);
             const [isProcessing, setIsProcessing] = useState(false);
-            const [isSaving, setIsSaving] = useState(false);
             const [error, setError] = useState('');
 
             // Parse CSV string into array of objects
@@ -131,7 +129,6 @@
                     
                     // Parse the CSV data
                     const parsedItemized = parseCSV(data.itemized_csv || '');
-                    const parsedTotals = parseCategoryTotals(data.category_totals_csv || '');
                     
                     // Initialize itemized data with categories
                     const itemizedWithCategories = parsedItemized.map(item => {
@@ -148,8 +145,11 @@
                         };
                     });
                     
+                    // Compute totals from the itemized data
+                    const computedTotals = calculateTotals(itemizedWithCategories);
+                    
                     setItemizedData(itemizedWithCategories);
-                    setCategoryTotals(parsedTotals);
+                    setCategoryTotals(computedTotals);
                     setNotes(data.notes || []);
                 } catch (err) {
                     setError(`Error processing logs: ${err.message}`);
@@ -168,47 +168,28 @@
                 setCategoryTotals(newTotals);
             };
 
-            const handleSave = async () => {
-                if (!itemizedData.length) return;
-
-                setIsSaving(true);
-                setError('');
-
+            // Fallback copy function for non-secure contexts
+            const fallbackCopyToClipboard = (text) => {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                
                 try {
-                    // Calculate final totals
-                    const finalTotals = calculateTotals(itemizedData);
-                    
-                    // Prepare payload according to API spec
-                    const payload = {
-                        totals: finalTotals,
-                        notes: notes
-                    };
-
-                    const response = await fetch(SAVE_WORKFLOW_URL, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-
-                    alert('Data saved successfully!');
-                    setLogs('');
-                    setItemizedData([]);
-                    setCategoryTotals({});
-                    setNotes([]);
+                    const successful = document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    return successful;
                 } catch (err) {
-                    setError(`Error saving data: ${err.message}`);
-                } finally {
-                    setIsSaving(false);
+                    document.body.removeChild(textArea);
+                    return false;
                 }
             };
 
-            const copyCategoryTotals = () => {
+            const copyCategoryTotals = async () => {
                 // Format as tab-separated values for Excel (only category rows, excluding grand total)
                 const lines = ['Category\tTotal'];
                 CATEGORIES.forEach(category => {
@@ -217,20 +198,47 @@
                 });
                 
                 const text = lines.join('\n');
-                navigator.clipboard.writeText(text).then(() => {
+                
+                // Try modern clipboard API first
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        alert('Category totals copied to clipboard! Paste into Excel.');
+                        return;
+                    } catch (err) {
+                        console.error('Clipboard API failed:', err);
+                    }
+                }
+                
+                // Fallback to execCommand
+                if (fallbackCopyToClipboard(text)) {
                     alert('Category totals copied to clipboard! Paste into Excel.');
-                }).catch(err => {
-                    setError('Failed to copy to clipboard');
-                });
+                } else {
+                    setError('Failed to copy to clipboard. Please copy manually.');
+                }
             };
 
-            const copyNotes = () => {
-                const text = notes.join('\n');
-                navigator.clipboard.writeText(text).then(() => {
+            const copyNotes = async () => {
+                // Format notes as bullet points
+                const text = notes.map(note => `• ${note}`).join('\n');
+                
+                // Try modern clipboard API first
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        alert('Notes copied to clipboard!');
+                        return;
+                    } catch (err) {
+                        console.error('Clipboard API failed:', err);
+                    }
+                }
+                
+                // Fallback to execCommand
+                if (fallbackCopyToClipboard(text)) {
                     alert('Notes copied to clipboard!');
-                }).catch(err => {
-                    setError('Failed to copy to clipboard');
-                });
+                } else {
+                    setError('Failed to copy to clipboard. Please copy manually.');
+                }
             };
 
             // Get table headers from first item
@@ -474,44 +482,6 @@
                                         </div>
                                     </div>
                                 )}
-
-                                {/* Save Button */}
-                                <div className="bg-white border-2 sm:border-4 border-black p-4 sm:p-6 md:p-8" style={{ boxShadow: '8px 8px 0px 0px #000' }}>
-                                    <button
-                                        onClick={handleSave}
-                                        disabled={isSaving}
-                                        className={`w-full py-3 sm:py-4 md:py-5 text-white border-2 sm:border-4 border-black font-black text-base sm:text-lg md:text-xl uppercase ${isSaving ? 'bg-gray-400' : 'bg-orange-600'}`}
-                                        style={{ 
-                                            boxShadow: '6px 6px 0px 0px #000',
-                                            transition: 'all 0.1s',
-                                            cursor: isSaving ? 'not-allowed' : 'pointer'
-                                        }}
-                                        onMouseDown={(e) => {
-                                            if (!isSaving) {
-                                                e.currentTarget.style.transform = 'translate(3px, 3px)';
-                                                e.currentTarget.style.boxShadow = '3px 3px 0px 0px #000';
-                                            }
-                                        }}
-                                        onMouseUp={(e) => {
-                                            if (!isSaving) {
-                                                e.currentTarget.style.transform = 'translate(0px, 0px)';
-                                                e.currentTarget.style.boxShadow = '6px 6px 0px 0px #000';
-                                            }
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.transform = 'translate(0px, 0px)';
-                                            e.currentTarget.style.boxShadow = '6px 6px 0px 0px #000';
-                                        }}
-                                    >
-                                        {isSaving ? (
-                                            <span className="flex items-center justify-center">
-                                                <span className="animate-spin mr-2">⟳</span> Saving...
-                                            </span>
-                                        ) : (
-                                            'Save & Approve'
-                                        )}
-                                    </button>
-                                </div>
                             </div>
                         )}
                     </div>
