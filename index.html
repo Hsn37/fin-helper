@@ -173,7 +173,7 @@
                     return total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 }).join('\t');
                 
-                const text = `${categories}\n${totals}`;
+                const text = `${totals}`;
                 
                 // Try modern clipboard API first
                 if (navigator.clipboard && navigator.clipboard.writeText) {
