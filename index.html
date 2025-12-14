@@ -61,30 +61,6 @@
                 return data;
             };
 
-            // Parse category totals CSV
-            const parseCategoryTotals = (csvString) => {
-                if (!csvString || !csvString.trim()) return {};
-                
-                const lines = csvString.trim().split('\n');
-                const totals = {};
-                
-                // Skip header if present, process data rows
-                const startIdx = lines[0].toLowerCase().includes('category') ? 1 : 0;
-                
-                for (let i = startIdx; i < lines.length; i++) {
-                    const parts = lines[i].split(',').map(p => p.trim());
-                    if (parts.length >= 2) {
-                        const category = parts[0];
-                        const amount = parseFloat(parts[1]) || 0;
-                        if (category) {
-                            totals[category] = amount;
-                        }
-                    }
-                }
-                
-                return totals;
-            };
-
             // Calculate totals from itemized data
             const calculateTotals = (items) => {
                 const totals = {};
@@ -190,14 +166,14 @@
             };
 
             const copyCategoryTotals = async () => {
-                // Format as tab-separated values for Excel (only category rows, excluding grand total)
-                const lines = ['Category\tTotal'];
-                CATEGORIES.forEach(category => {
+                // Format as tab-separated values horizontally for Excel
+                const categories = CATEGORIES.join('\t');
+                const totals = CATEGORIES.map(category => {
                     const total = categoryTotals[category] || 0;
-                    lines.push(`${category}\t${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-                });
+                    return total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                }).join('\t');
                 
-                const text = lines.join('\n');
+                const text = `${categories}\n${totals}`;
                 
                 // Try modern clipboard API first
                 if (navigator.clipboard && navigator.clipboard.writeText) {
